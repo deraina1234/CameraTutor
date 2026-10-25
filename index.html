@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEE — Your Camera, Decoded</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Permanent+Marker&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+:root {
+  --deep-blue: #0a1a3a;
+  --deep-blue-2: #061533;
+  --deep-blue-3: #050d22;
+  --black: #0a0a0a;
+  --white: #f0ece0;
+  --accent-blue: #4a7db5;
+  --accent-hot: #ff4466;
+  --panel-bg: rgba(8, 20, 44, 0.94);
+  --panel-border: #1a3a6a;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--deep-blue);
+  font-family: 'Special Elite', 'Courier New', monospace;
+  color: var(--white);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== DECORATIVE LAYERS ===== */
+.decorative {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  transition: filter 0.7s ease, opacity 0.7s ease;
+  will-change: filter, opacity;
+}
+.zoomed .decorative {
+  filter: blur(45px) saturate(1.5);
+  opacity: 0.25;
+}
+
+.halftone {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(circle, rgba(240,236,224,0.07) 1px, transparent 1.5px);
+  background-size: 7px 7px;
+  opacity: 0.9;
+}
+
+.grunge-noise {
+  position: absolute; inset: 0;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.light-leak {
+  position: absolute; border-radius: 50%;
+  filter: blur(90px); mix-blend-mode: screen;
+}
+.ll-1 { top: -15%; left: -10%; width: 50%; height: 55%;
+  background: radial-gradient(ellipse, rgba(255,90,40,0.13), transparent 70%); }
+.ll-2 { bottom: -10%; right: -10%; width: 60%; height: 60%;
+  background: radial-gradient(ellipse, rgba(60,120,255,0.16), transparent 70%); }
+.ll-3 { top: 35%; right: -20%; width: 45%; height: 45%;
+  background: radial-gradient(ellipse, rgba(255,180,80,0.08), transparent 70%); }
+.ll-4 { top: 50%; left: -15%; width: 40%; height: 40%;
+  background: radial-gradient(ellipse, rgba(255,68,102,0.08), transparent 70%); }
+
+.prism {
+  position: absolute; top: 25%; left: 8%; width: 84%; height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(255,80,80,0.12), rgba(80,255,180,0.12), rgba(80,80,255,0.12), transparent);
+  transform: rotate(-12deg); filter: blur(12px);
+}
+.prism-2 {
+  position: absolute; top: 65%; left: 5%; width: 90%; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255,200,80,0.08), rgba(80,200,255,0.08), transparent);
+  transform: rotate(6deg); filter: blur(15px);
+}
+
+/* ===== 3D CANVAS ===== */
+#canvas-container {
+  position: fixed; inset: 0; z-index: 1;
+}
+#canvas-container canvas { display: block; }
+
+/* ===== BRAND ===== */
+.brand {
+  position: fixed; top: 28px; left: 32px; z-index: 10;
+  transition: opacity 0.5s ease;
+}
+.zoomed .brand { opacity: 0.15; }
+.brand h1 {
+  font-family: 'Bungee', sans-serif;
+  font-size: 2.6rem; line-height: 1; margin: 0;
+  letter-spacing: -2px;
+  color: var(--white);
+  text-shadow: 3px 3px 0 var(--black), 6px 6px 0 rgba(74,125,181,0.25);
+}
+.brand h1 .dot { color: var(--accent-hot); }
+.brand .tagline {
+  font-family: 'Special Elite', monospace;
+  font-size: 0.8rem; margin: 6px 0 0;
+  color: rgba(240,236,224,0.45); letter-spacing: 3px; text-transform: uppercase;
+}
+
+/* ===== CAMERA BADGE ===== */
+.camera-badge {
+  position: fixed; top: 28px; right: 32px; z-index: 10;
+  text-align: right; transition: opacity 0.5s ease;
+}
+.zoomed .camera-badge { opacity: 0.15; }
+.camera-badge .name {
+  font-family: 'Bungee', sans-serif; font-size: 1rem;
+  color: var(--white); letter-spacing: 1px;
+}
+.camera-badge .lens {
+  font-family: 'Special Elite', monospace; font-size: 0.75rem;
+  color: rgba(240,236,224,0.5); margin-top: 2px;
+}
+
+/* ===== HINTS ===== */
+.hints {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  z-index: 10; display: flex; gap: 28px;
+  font-family: 'Special Elite', monospace; font-size: 0.72rem;
+  color: rgba(240,236,224,0.4); letter-spacing: 2px;
+  transition: opacity 0.5s ease;
+}
+.zoomed .hints { opacity: 0.2; }
+.hints span::before { content: '◆ '; color: var(--accent-hot); font-size: 0.5rem; vertical-align: middle; }
+
+/* ===== ZOOM CONTROLS ===== */
+.zoom-controls {
+  position: fixed; bottom: 28px; right: 32px; z-index: 10;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.zoom-btn {
+  width: 50px; height: 50px;
+  border: 2px solid var(--accent-blue);
+  background: rgba(10,26,58,0.7);
+  color: var(--white); font-size: 1.6rem;
+  font-family: 'Bungee', sans-serif; cursor: pointer;
+  border-radius: 6px; transition: all 0.2s;
+  backdrop-filter: blur(12px);
+  display: flex; align-items: center; justify-content: center;
+}
+.zoom-btn:hover {
+  background: var(--accent-blue); transform: scale(1.06);
+  box-shadow: 0 0 20px rgba(74,125,181,0.4);
+}
+.zoom-btn:active { transform: scale(0.95); }
+
+/* ===== TOOLTIP ===== */
+.tooltip {
+  position: fixed; z-index: 30; pointer-events: none;
+  display: none; background: var(--white); color: var(--deep-blue);
+  padding: 6px 16px; font-family: 'Permanent Marker', cursive;
+  font-size: 0.9rem; border-radius: 3px;
+  transform: translate(-50%, -140%);
+  white-space: nowrap; box-shadow: 2px 3px 0 var(--black);
+  letter-spacing: 1px;
+}
+.tooltip.show { display: block; }
+
+/* ===== INFO PANEL ===== */
+.info-panel {
+  position: fixed; top: 50%; right: -540px; transform: translateY(-50%);
+  width: 440px; max-height: 78vh; z-index: 25;
+  background: var(--panel-bg); border: 2px solid var(--panel-border);
+  border-radius: 8px; padding: 36px 32px 28px;
+  transition: right 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(24px); overflow-y: auto;
+  box-shadow: -12px 0 50px rgba(0,0,0,0.5), inset 0 0 80px rgba(74,125,181,0.04);
+}
+.info-panel.open { right: 28px; }
+.info-panel::before {
+  content: ''; position: absolute; top:0; left:0; right:0; height: 100%;
+  background-image: radial-gradient(circle, rgba(240,236,224,0.04) 1px, transparent 1.5px);
+  background-size: 6px 6px; pointer-events: none; border-radius: 6px;
+}
+.close-btn {
+  position: absolute; top: 14px; right: 18px;
+  width: 32px; height: 32px; background: none; border: none;
+  color: rgba(240,236,224,0.5); font-size: 1.6rem; cursor: pointer;
+  z-index: 2; transition: color 0.2s, transform 0.2s;
+  font-family: 'Bungee', sans-serif;
+}
+.close-btn:hover { color: var(--accent-hot); transform: rotate(90deg); }
+#info-title {
+  font-family: 'Bungee', sans-serif; font-size: 1.7rem; line-height: 1.05;
+  color: var(--white); margin: 0 0 4px; letter-spacing: -1px;
+  position: relative; z-index: 1;
+}
+#info-subtitle {
+  font-family: 'Permanent Marker', cursive; font-size: 1.15rem;
+  color: var(--accent-hot); margin: 0 0 18px; position: relative; z-index: 1;
+}
+#info-description {
+  font-family: 'Special Elite', monospace; font-size: 0.92rem; line-height: 1.65;
+  color: rgba(240,236,224,0.82); margin: 0 0 22px; position: relative; z-index: 1;
+}
+#info-tips { list-style: none; padding: 0; margin: 0; position: relative; z-index: 1; }
+#info-tips li {
+  font-family: 'Special Elite', monospace; font-size: 0.82rem; line-height: 1.55;
+  color: rgba(240,236,224,0.6); padding: 10px 0 10px 22px;
+  border-top: 1px solid rgba(74,125,181,0.12); position: relative;
+}
+#info-tips li::before {
+  content: '▸'; position: absolute; left: 0; top: 10px;
+  color: var(--accent-blue); font-size: 0.9rem;
+}
+
+/* ===== INTRO OVERLAY ===== */
+.intro-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: var(--deep-blue-2); display: flex;
+  align-items: center; justify-content: center;
+  transition: opacity 0.9s ease, visibility 0.9s;
+}
+.intro-overlay.hidden { opacity: 0; visibility: hidden; }
+.intro-content { text-align: center; max-width: 520px; padding: 40px; }
+.intro-title {
+  font-family: 'Bungee', sans-serif; font-size: 5rem; line-height: 1;
+  color: var(--white); margin: 0; letter-spacing: -3px;
+  text-shadow: 4px 4px 0 var(--black), 8px 8px 0 rgba(74,125,181,0.25);
+}
+.intro-title .dot { color: var(--accent-hot); }
+.intro-sub {
+  font-family: 'Permanent Marker', cursive; font-size: 1.35rem;
+  color: var(--accent-blue); margin: 10px 0 28px;
+}
+.intro-desc {
+  font-family: 'Special Elite', monospace; font-size: 1rem; line-height: 1.7;
+  color: rgba(240,236,224,0.55); margin: 0 0 36px;
+}
+.start-btn {
+  font-family: 'Bungee', sans-serif; font-size: 1.2rem;
+  padding: 15px 48px; background: var(--white); color: var(--deep-blue);
+  border: none; border-radius: 4px; cursor: pointer; letter-spacing: 3px;
+  transition: all 0.2s; box-shadow: 5px 5px 0 var(--accent-hot);
+}
+.start-btn:hover {
+  transform: translate(-3px, -3px); box-shadow: 8px 8px 0 var(--accent-hot);
+}
+.start-btn:active { transform: translate(0, 0); box-shadow: 2px 2px 0 var(--accent-hot); }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .brand h1 { font-size: 2rem; }
+  .info-panel { width: calc(100vw - 40px); right: -110vw; padding: 28px 24px; }
+  .info-panel.open { right: 20px; }
+  .hints { display: none; }
+  .camera-badge { display: none; }
+  .intro-title { font-size: 3.5rem; }
+}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div class="decorative" id="decorative">
+  <div class="halftone"></div>
+  <div class="grunge-noise"></div>
+  <div class="light-leak ll-1"></div>
+  <div class="light-leak ll-2"></div>
+  <div class="light-leak ll-3"></div>
+  <div class="light-leak ll-4"></div>
+  <div class="prism"></div>
+  <div class="prism prism-2"></div>
+</div>
+
+<div id="canvas-container"></div>
+
+<header class="brand">
+  <h1>SEE<span class="dot">.</span></h1>
+  <p class="tagline">your camera, decoded</p>
+</header>
+
+<div class="camera-badge">
+  <div class="name">SONY a6400</div>
+  <div class="lens">+ Sigma 18-50mm f/2.8</div>
+</div>
+
+<div class="hints" id="hints">
+  <span>DRAG to rotate</span>
+  <span>SCROLL to zoom</span>
+  <span>CLICK a marker to learn</span>
+</div>
+
+<div class="zoom-controls">
+  <button id="zoom-in-btn" class="zoom-btn" title="Zoom In">+</button>
+  <button id="zoom-out-btn" class="zoom-btn" title="Zoom Out">&minus;</button>
+</div>
+
+<div id="tooltip" class="tooltip"></div>
+
+<div id="info-panel" class="info-panel">
+  <button class="close-btn" id="close-info">&times;</button>
+  <h2 id="info-title"></h2>
+  <p id="info-subtitle"></p>
+  <p id="info-description"></p>
+  <ul id="info-tips"></ul>
+</div>
+
+<div id="intro" class="intro-overlay">
+  <div class="intro-content">
+    <h1 class="intro-title">SEE<span class="dot">.</span></h1>
+    <p class="intro-sub">your camera, decoded</p>
+    <p class="intro-desc">A 3D interactive camera. Spin it, zoom it, click anything to learn what it does.<br>No manual. No YouTube. Just you and the machine.</p>
+    <button id="start-btn" class="start-btn">START &rarr;</button>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+// ========================================================
+// SCENE SETUP
+// ========================================================
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+container.appendChild(renderer.domElement);
+
+// Environment for nice reflections
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+// ========================================================
+// LIGHTING
+// ========================================================
+const ambient = new THREE.AmbientLight(0xb0c8e8, 0.35);
+scene.add(ambient);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+keyLight.position.set(8, 12, 8);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.near = 1;
+keyLight.shadow.camera.far = 40;
+keyLight.shadow.camera.left = -10;
+keyLight.shadow.camera.right = 10;
+keyLight.shadow.camera.top = 10;
+keyLight.shadow.camera.bottom = -10;
+keyLight.shadow.bias = -0.0004;
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0x4a6db5, 0.4);
+fillLight.position.set(-6, 4, -4);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xffd8a8, 0.5);
+rimLight.position.set(-3, 5, 10);
+scene.add(rimLight);
+
+// Shadow catcher ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(40, 40),
+  new THREE.ShadowMaterial({ opacity: 0.35 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -3.6;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ========================================================
+// MATERIALS
+// ========================================================
+const matBody     = new THREE.MeshStandardMaterial({ color: 0x1c1c20, roughness: 0.62, metalness: 0.25 });
+const matGrip     = new THREE.MeshStandardMaterial({ color: 0x101010, roughness: 0.95, metalness: 0.0 });
+const matDial     = new THREE.MeshStandardMaterial({ color: 0x282828, roughness: 0.35, metalness: 0.65 });
+const matDialKnur = new THREE.MeshStandardMaterial({ color: 0x2e2e2e, roughness: 0.6, metalness: 0.5 });
+const matButton   = new THREE.MeshStandardMaterial({ color: 0x1e1e1e, roughness: 0.4, metalness: 0.4 });
+const matLens     = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.5, metalness: 0.4 });
+const matLensRing = new THREE.MeshStandardMaterial({ color: 0x0d0d0d, roughness: 0.7, metalness: 0.3 });
+const matGlass    = new THREE.MeshStandardMaterial({ color: 0x040810, roughness: 0.02, metalness: 0.95, envMapIntensity: 1.5 });
+const matScreen   = new THREE.MeshStandardMaterial({ color: 0x080a12, roughness: 0.08, metalness: 0.4, emissive: 0x020408 });
+const matSilver    = new THREE.MeshStandardMaterial({ color: 0x999999, roughness: 0.2, metalness: 0.9 });
+const matRedDot    = new THREE.MeshStandardMaterial({ color: 0xff3322, roughness: 0.4, metalness: 0.3, emissive: 0x441100 });
+
+// ========================================================
+// TEXTURE HELPERS
+// ========================================================
+function makeTextTexture(text, opts = {}) {
+  const c = document.createElement('canvas');
+  c.width = opts.w || 512; c.height = opts.h || 128;
+  const ctx = c.getContext('2d');
+  if (opts.bg) { ctx.fillStyle = opts.bg; ctx.fillRect(0, 0, c.width, c.height); }
+  ctx.fillStyle = opts.color || 'rgba(190,190,190,0.85)';
+  ctx.font = opts.font || 'bold 70px Arial, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (opts.shadow) { ctx.shadowColor = opts.shadow; ctx.shadowBlur = 4; }
+  if (opts.flip) { ctx.save(); ctx.scale(-1, 1); ctx.fillText(text, -c.width / 2, c.height / 2); ctx.restore(); }
+  else { ctx.fillText(text, c.width / 2, c.height / 2); }
+  return new THREE.CanvasTexture(c);
+}
+
+function makeDialTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#1e1e1e'; ctx.fillRect(0, 0, 256, 256);
+  // outer ring
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(128, 128, 110, 0, Math.PI * 2); ctx.stroke();
+  const modes = ['AUTO','','','P','A','S','M','1','2','3','4'];
+  const labels = ['AUTO','','','P','A','S','M','1','2','3','4'];
+  for (let i = 0; i < 11; i++) {
+    const angle = (i / 11) * Math.PI * 2 - Math.PI / 2;
+    const x = 128 + Math.cos(angle) * 80;
+    const y = 128 + Math.sin(angle) * 80;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(angle + Math.PI / 2);
+    ctx.fillStyle = '#888'; ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(labels[i] || '', 0, 0); ctx.restore();
+  }
+  // tick marks
+  for (let i = 0; i < 22; i++) {
+    const angle = (i / 22) * Math.PI * 2;
+    ctx.strokeStyle = '#444'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(128 + Math.cos(angle) * 108, 128 + Math.sin(angle) * 108);
+    ctx.lineTo(128 + Math.cos(angle) * 118, 128 + Math.sin(angle) * 118);
+    ctx.stroke();
+  }
+  return new THREE.CanvasTexture(c);
+}
+
+function makeGripTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0e0e0e'; ctx.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 300; i++) {
+    const v = 20 + Math.random() * 18;
+    ctx.fillStyle = `rgba(${v},${v},${v},0.6)`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * 128, Math.random() * 128, 1 + Math.random() * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4);
+  return tex;
+}
+
+function makeLensTextTexture() {
+  const c = document.createElement('canvas');
+  c.width = 760; c.height = 72;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(170,170,170,0.9)';
+  ctx.font = 'bold 26px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('SIGMA 18-50mm 1:2.8 DC DN | Contemporary', 380, 36);
+  return new THREE.CanvasTexture(c);
+}
+
+const gripTex = makeGripTexture();
+const matGripTextured = new THREE.MeshStandardMaterial({
+  color: 0x0e0e0e, roughness: 0.95, metalness: 0,
+  map: gripTex, roughnessMap: gripTex
+});
+
+// ========================================================
+// BUILD CAMERA MODEL
+// ========================================================
+const model = new THREE.Group();
+const interactiveMeshes = [];
+
+function addPart(geo, mat, x, y, z, opts = {}) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  if (opts.rx) m.rotation.x = opts.rx;
+  if (opts.ry) m.rotation.y = opts.ry;
+  if (opts.rz) m.rotation.z = opts.rz;
+  if (opts.cast !== false) m.castShadow = true;
+  m.receiveShadow = opts.receive !== false;
+  model.add(m);
+  return m;
+}
+
+// --- BODY ---
+const body = addPart(new RoundedBoxGeometry(6, 4.2, 3, 4, 0.28), matBody, 0, 0, 0);
+
+// --- GRIP ---
+const grip = addPart(new RoundedBoxGeometry(1.7, 3.9, 1.5, 4, 0.3), matBody, 2.35, -0.15, 0.1);
+const gripRubber = addPart(new RoundedBoxGeometry(0.55, 2.6, 1.35, 3, 0.12), matGripTextured, 3.05, -0.15, 0.15);
+
+// --- TOP PLATE DETAILS ---
+// Mode dial (left)
+const modeDialGeo = new THREE.CylinderGeometry(0.62, 0.62, 0.32, 32);
+const modeDial = addPart(modeDialGeo, matDial, -1.7, 2.25, -0.2);
+const modeDialTop = addPart(new THREE.CylinderGeometry(0.55, 0.55, 0.08, 32),
+  new THREE.MeshStandardMaterial({ color: 0x222, roughness: 0.4, metalness: 0.6, map: makeDialTexture() }),
+  -1.7, 2.44, -0.2);
+// Mode dial pointer
+addPart(new THREE.BoxGeometry(0.08, 0.02, 0.2), matSilver, -1.7, 2.42, -0.7);
+
+// Rear control dial (right, behind shutter)
+const rearDial = addPart(new THREE.CylinderGeometry(0.5, 0.5, 0.22, 28), matDialKnur, 1.15, 2.2, 0.3);
+
+// Shutter button (right, on grip)
+const shutter = addPart(new THREE.CylinderGeometry(0.24, 0.24, 0.16, 24),
+  new THREE.MeshStandardMaterial({ color: 0x303030, roughness: 0.3, metalness: 0.7 }), 2.15, 2.18, -0.3);
+// Shutter ring
+addPart(new THREE.TorusGeometry(0.24, 0.03, 8, 24), matSilver, 2.15, 2.15, -0.3, { rx: Math.PI/2 });
+
+// Power switch lever
+addPart(new THREE.BoxGeometry(0.5, 0.14, 0.3), matDial, 1.65, 2.18, -0.3);
+
+// Movie button (small, on grip side)
+addPart(new THREE.CylinderGeometry(0.1, 0.1, 0.08, 16), matRedDot, 2.5, 1.0, -1.4);
+
+// Hot shoe
+const hotShoe = addPart(new THREE.BoxGeometry(1.3, 0.25, 0.7), matSilver, -0.1, 2.15, -0.5);
+addPart(new THREE.BoxGeometry(1.1, 0.4, 0.5), matBody, -0.1, 2.05, -0.5);
+// Hot shoe contacts
+for (let i = -1; i <= 1; i++) {
+  addPart(new THREE.BoxGeometry(0.08, 0.1, 0.4), matSilver, -0.1 + i * 0.35, 2.18, -0.5);
+}
+
+// EVF hump (top-back-left)
+const evfHump = addPart(new RoundedBoxGeometry(1.4, 0.7, 0.9, 3, 0.15), matBody, -0.9, 2.2, 0.7);
+// EVF eyepiece
+addPart(new THREE.BoxGeometry(0.9, 0.4, 0.3), matGrip, -0.9, 2.15, 1.2);
+addPart(new THREE.CylinderGeometry(0.3, 0.3, 0.1, 24),
+  new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.1, metalness: 0.2 }), -0.9, 2.15, 1.3, { rx: Math.PI/2 });
+// EVF sensor (small bump)
+addPart(new THREE.BoxGeometry(0.5, 0.08, 0.15), matBody, -0.9, 2.5, 0.7);
+
+// --- FRONT ---
+// Sony logo
+const sonyTex = makeTextTexture('SONY', { font: 'bold 80px Arial', color: 'rgba(200,200,200,0.7)', flip: true });
+const sonyPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(2.2, 0.5),
+  new THREE.MeshBasicMaterial({ map: sonyTex, transparent: true, side: THREE.DoubleSide })
+);
+sonyPlane.position.set(0.5, 1.2, -1.52);
+model.add(sonyPlane);
+
+// Model number
+const modelTex = makeTextTexture('a6400', { font: 'bold 38px Arial', color: 'rgba(160,160,160,0.6)', w: 256, h: 64, flip: true });
+const modelNumPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.1, 0.3),
+  new THREE.MeshBasicMaterial({ map: modelTex, transparent: true, side: THREE.DoubleSide })
+);
+modelNumPlane.position.set(0.5, 0.6, -1.52);
+model.add(modelNumPlane);
+
+// Red dot / recording lamp
+addPart(new THREE.SphereGeometry(0.05, 12, 12), matRedDot, -1.5, 0.8, -1.5);
+
+// Selfie/screen flip hinge marks (small)
+addPart(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 12), matSilver, -2.8, -0.1, 1.3, { rx: Math.PI/2 });
+addPart(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 12), matSilver, 1.5, -0.1, 1.3, { rx: Math.PI/2 });
+
+// --- LENS MOUNT ---
+addPart(new THREE.CylinderGeometry(1.4, 1.4, 0.25, 32), matSilver, 0, 0, -1.55, { rx: Math.PI/2 });
+addPart(new THREE.CylinderGeometry(1.3, 1.3, 0.1, 32), matBody, 0, 0, -1.4, { rx: Math.PI/2 });
+
+// --- SIGMA 18-50mm LENS ---
+// Main barrel
+const lensBarrel = addPart(new THREE.CylinderGeometry(1.2, 1.2, 1.6, 36), matLens, 0, 0, -2.6, { rx: Math.PI/2 });
+// Mount ring (thicker part connecting to body)
+addPart(new THREE.CylinderGeometry(1.25, 1.2, 0.3, 36), matLensRing, 0, 0, -1.8, { rx: Math.PI/2 });
+
+// Zoom ring (textured, wider)
+const zoomRing = addPart(new THREE.CylinderGeometry(1.28, 1.28, 0.9, 36), matLensRing, 0, 0, -2.9, { rx: Math.PI/2 });
+// Zoom ring ridges
+for (let i = 0; i < 24; i++) {
+  const angle = (i / 24) * Math.PI * 2;
+  addPart(new THREE.BoxGeometry(0.04, 0.9, 0.1), matLens,
+    Math.cos(angle) * 1.29, 0, -2.9 + Math.sin(angle) * 0.001, { ry: angle });
+}
+// Zoom text
+const zoomTex = makeLensTextTexture();
+const zoomLabelMat = new THREE.MeshBasicMaterial({ map: zoomTex, transparent: true });
+const zoomLabelGeo = new THREE.PlaneGeometry(3, 0.28);
+const zoomLabel = new THREE.Mesh(zoomLabelGeo, zoomLabelMat);
+zoomLabel.position.set(0, 1.29, -2.9);
+zoomLabel.rotation.x = -Math.PI / 2;
+model.add(zoomLabel);
+
+// Mid section
+addPart(new THREE.CylinderGeometry(1.16, 1.16, 0.5, 36), matLens, 0, 0, -3.6, { rx: Math.PI/2 });
+
+// Focus ring (textured)
+const focusRing = addPart(new THREE.CylinderGeometry(1.22, 1.22, 0.7, 36), matLensRing, 0, 0, -4.1, { rx: Math.PI/2 });
+for (let i = 0; i < 28; i++) {
+  const angle = (i / 28) * Math.PI * 2;
+  addPart(new THREE.BoxGeometry(0.03, 0.7, 0.08), matLens,
+    Math.cos(angle) * 1.23, 0, -4.1, { ry: angle });
+}
+
+// Front section
+addPart(new THREE.CylinderGeometry(1.12, 1.16, 0.3, 36), matLens, 0, 0, -4.5, { rx: Math.PI/2 });
+
+// Front element (glass)
+const frontGlass = addPart(new THREE.CylinderGeometry(1.05, 1.05, 0.15, 36), matGlass, 0, 0, -4.68, { rx: Math.PI/2 });
+// Inner glass reflection
+addPart(new THREE.CircleGeometry(0.95, 36),
+  new THREE.MeshStandardMaterial({ color: 0x0a1520, roughness: 0.01, metalness: 1, envMapIntensity: 2, side: THREE.DoubleSide }),
+  0, 0, -4.7, { rx: -Math.PI/2 });
+// Front lens ring accent
+addPart(new THREE.CylinderGeometry(1.13, 1.13, 0.08, 36), matSilver, 0, 0, -4.7, { rx: Math.PI/2 });
+
+// --- BACK ---
+// LCD screen (tilting, slightly angled)
+const screenPivot = new THREE.Group();
+screenPivot.position.set(-0.1, -0.1, 1.45);
+model.add(screenPivot);
+const screenMesh = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.4, 0.08), matScreen);
+screenMesh.castShadow = true; screenMesh.receiveShadow = true;
+screenPivot.add(screenMesh);
+// Screen bezel
+const bezel = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.6, 0.05),
+  new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.5, metalness: 0.3 }));
+bezel.position.z = -0.02; screenPivot.add(bezel);
+
+// Back buttons (right side)
+function addBtn(x, y, z, r = 0.12, mat = matButton) {
+  return addPart(new THREE.CylinderGeometry(r, r, 0.1, 20), mat, x, y, z);
+}
+
+// Menu button (top right)
+addBtn(2.3, 1.25, 1.45, 0.1);
+// C2 button
+addBtn(2.5, 0.8, 1.45, 0.08);
+// Fn button (middle right)
+const fnBtn = addBtn(2.6, 0.35, 1.45, 0.1);
+// AEL/ISO area - we'll use this for ISO hotspot
+addBtn(2.5, -0.1, 1.45, 0.1);
+// Playback button (bottom right)
+const playBtn = addBtn(2.6, -1.0, 1.45, 0.1);
+// Delete/trash
+addBtn(2.4, -1.5, 1.45, 0.08);
+
+// Control wheel (center-right, bottom)
+const wheel = addPart(new THREE.CylinderGeometry(0.55, 0.55, 0.08, 32),
+  new THREE.MeshStandardMaterial({ color: 0x181818, roughness: 0.4, metalness: 0.4 }), 1.6, -0.9, 1.46);
+addPart(new THREE.CylinderGeometry(0.4, 0.4, 0.1, 24), matButton, 1.6, -0.9, 1.48);
+// Center OK button
+addPart(new THREE.CylinderGeometry(0.12, 0.12, 0.14, 16), matSilver, 1.6, -0.9, 1.52);
+
+// Directional buttons around wheel
+for (let i = 0; i < 4; i++) {
+  const angle = i * Math.PI / 2;
+  const x = 1.6 + Math.cos(angle) * 0.5;
+  const y = -0.9 + Math.sin(angle) * 0.5;
+  addPart(new THREE.BoxGeometry(0.2, 0.2, 0.06), matButton, x, y, 1.5);
+}
+
+// Thumb rest (right side)
+addPart(new THREE.BoxGeometry(0.3, 1.5, 0.2), matGrip, 2.6, 0.2, 0.8);
+
+// Left side - ports (just a small cover)
+addPart(new THREE.BoxGeometry(0.1, 0.6, 0.8), matBody, -2.9, 0, -0.3);
+// Port flap
+addPart(new THREE.BoxGeometry(0.08, 0.5, 0.6), matGrip, -2.95, 0, -0.2);
+
+// Bottom - battery door
+addPart(new THREE.BoxGeometry(2, 0.08, 1.5), matBody, 0.5, -2.12, 0.3);
+addPart(new THREE.CylinderGeometry(0.3, 0.3, 0.1, 24), matSilver, 1.5, -2.12, 0.3, { rx: Math.PI/2 });
+// Tripod mount
+addPart(new THREE.CylinderGeometry(0.15, 0.15, 0.15, 16), matSilver, -0.5, -2.12, 0.5, { rx: Math.PI/2 });
+
+scene.add(model);
+
+// ========================================================
+// HOTSPOTS
+// ========================================================
+function makeHotspotTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const ctx = c.getContext('2d');
+  // outer ring
+  ctx.beginPath(); ctx.arc(64, 64, 55, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3; ctx.stroke();
+  // inner filled circle
+  ctx.beginPath(); ctx.arc(64, 64, 22, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(74,125,181,0.7)'; ctx.fill();
+  // inner ring
+  ctx.beginPath(); ctx.arc(64, 64, 22, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 2; ctx.stroke();
+  // dot
+  ctx.beginPath(); ctx.arc(64, 64, 6, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,1)'; ctx.fill();
+  return new THREE.CanvasTexture(c);
+}
+const hotspotTex = makeHotspotTexture();
+
+const hotspotData = [
+  {
+    label: 'Shutter Button',
+    title: 'SHUTTER BUTTON',
+    subtitle: 'Shutter Speed — freeze or flow',
+    description: 'The shutter is a curtain inside your camera. Press this button and it blinks open for a precise fraction of a second, letting light flood onto the sensor. That duration — your shutter speed — is the difference between a hummingbird frozen mid-flap and a river melted into silk.',
+    tips: [
+      '1/1000s and faster: freeze sports, wildlife, splashing water',
+      '1/125s: a safe default for handheld shooting',
+      '1/30s and slower: motion blur, light trails, silky waterfalls',
+      'Below 1/(focal length): use a tripod or stabilization',
+      'On the a6400: use S mode or M mode, turn the rear dial',
+    ],
+    position: [2.15, 2.7, -0.3],
+    meshes: [shutter],
+  },
+  {
+    label: 'Mode Dial',
+    title: 'MODE DIAL',
+    subtitle: 'Shooting Modes — who drives?',
+    description: 'Your camera\u2019s personality switch. Each letter changes how much control the camera keeps versus hands to you. Spin the dial to jump between auto-everything and full creative freedom.',
+    tips: [
+      'AUTO: the camera does everything — great starting point',
+      'P (Program): camera picks shutter & aperture, you handle the rest',
+      'A (Aperture Priority): you set aperture, camera handles shutter — most popular mode',
+      'S (Shutter Priority): you set shutter speed, camera handles aperture',
+      'M (Manual): you control everything — ultimate creative freedom',
+    ],
+    position: [-1.7, 2.85, -0.2],
+    meshes: [modeDial, modeDialTop],
+  },
+  {
+    label: 'Control Dial',
+    title: 'CONTROL DIAL',
+    subtitle: 'Quick Adjustments',
+    description: 'Your main scroll wheel. What it controls changes with your mode — shutter speed in S/M, aperture in A, program shift in P. This is your fastest path to changing exposure without diving into menus.',
+    tips: [
+      'Turn left or right to change the active setting',
+      'In Manual mode, hold the AEL button and turn to change aperture',
+      'Press the center wheel button to confirm or zoom into photos',
+    ],
+    position: [1.15, 2.55, 0.3],
+    meshes: [rearDial],
+  },
+  {
+    label: 'Aperture',
+    title: 'APERTURE',
+    subtitle: 'f/2.8 — the eye of your lens',
+    description: 'Inside your Sigma lens, blades slide together to form a hole — the aperture. Wide open, it gulps light and melts the background into buttery bokeh. Stopped down, it sharpens everything from front to back. The number seems backwards: smaller f-number = bigger hole = more light + more blur. Your Sigma 18-50mm holds f/2.8 through the entire zoom range, which is exceptional for a lens this compact.',
+    tips: [
+      'f/2.8: maximum light + dreamy background blur — portraits, low light',
+      'f/4: slightly more depth, still bright and clean',
+      'f/8: the sweet spot — razor sharp across the frame',
+      'f/11\u2013f/16: everything in focus — landscapes, architecture',
+      'On the a6400: use A mode, turn the rear dial to change aperture',
+    ],
+    position: [0, 0, -5.2],
+    meshes: [zoomRing, lensBarrel, frontGlass],
+  },
+  {
+    label: 'ISO',
+    title: 'ISO',
+    subtitle: 'Sensor Sensitivity — the volume knob',
+    description: 'ISO tells your sensor how hard to listen for light. Turn it up and the sensor hears more — but just like cranking music too loud, the signal gets noisy. Grain appears, colors shift, detail softens. The trick is to stay as low as possible while still getting the shot.',
+    tips: [
+      'ISO 100\u2013200: bright outdoors, studio — cleanest possible image',
+      'ISO 400\u2013800: overcast, window light, golden hour',
+      'ISO 1600\u20133200: indoors, events, dusk — expect minor grain',
+      'ISO 6400+: concerts, night streets, candlelight — embrace the grain',
+      'On the a6400: press Fn then select ISO, or assign it to a custom button',
+    ],
+    position: [2.5, 0.3, 1.85],
+    meshes: [fnBtn],
+  },
+  {
+    label: 'Viewfinder',
+    title: 'ELECTRONIC VIEWFINDER',
+    subtitle: 'What You See Is What You Get',
+    description: 'Hold the camera to your eye and see exactly what the sensor sees — in real time. Unlike optical viewfinders, the EVF shows your exposure, white balance, and depth of field before you shoot. If the image looks wrong here, it will look wrong in the file.',
+    tips: [
+      '0.39-inch OLED with 2.36 million dots — sharp enough to manual focus',
+      'Shows a live histogram, level gauge, and focus peaking',
+      'An eye sensor switches automatically between EVF and LCD',
+      'Tilt the camera to your eye and the screen goes dark — seamless',
+    ],
+    position: [-0.9, 2.6, 1.3],
+    meshes: [evfHump],
+  },
+  {
+    label: 'LCD Screen',
+    title: 'LCD SCREEN',
+    subtitle: '180\u00B0 Tilting Touchscreen',
+    description: 'Your 3-inch touchscreen flips up 180\u00B0 for selfies and vlogging, and tilts down 74\u00B0 for waist-level shooting. Tap to focus, pinch to zoom, swipe to browse your gallery.',
+    tips: [
+      'Tilt up 180\u00B0 for selfies, vlogs, and over-crowd shots',
+      'Tilt down 74\u00B0 for low-angle and ground-level work',
+      'Touch shutter: tap anywhere on screen to focus and shoot in one tap',
+      'Swipe through photos, pinch to zoom into details',
+    ],
+    position: [-0.1, -0.1, 2.1],
+    meshes: [screenMesh, bezel],
+  },
+  {
+    label: 'Hot Shoe',
+    title: 'HOT SHOE',
+    subtitle: 'Multi Interface Shoe',
+    description: 'A mounting bracket with electrical contacts. Slide on a flash, microphone, or wireless trigger and the camera talks to it automatically — TTL flash, power, and data all through this one slot.',
+    tips: [
+      'Add an external flash for bounce lighting and softer shadows',
+      'Mount a shotgun mic for dramatically better video audio',
+      'Use a wireless trigger for off-camera flash at any angle',
+      'The contacts handle TTL metering, power, and data signals',
+    ],
+    position: [-0.1, 2.5, -0.5],
+    meshes: [hotShoe],
+  },
+  {
+    label: 'Fn Button',
+    title: 'FN BUTTON',
+    subtitle: 'Function Menu — your shortcut',
+    description: 'Your shortcut key. Press it to pop up a quick menu with your most-used settings — ISO, white balance, focus mode, drive mode — without leaving the viewfinder. The fastest way to change settings mid-shoot.',
+    tips: [
+      'Customize which 12 options appear in the Fn menu',
+      'Navigate with the control wheel, select with the center button',
+      'Assign your most-used settings here for one-press access',
+    ],
+    position: [2.7, 0.6, 1.85],
+    meshes: [fnBtn],
+  },
+  {
+    label: 'Playback',
+    title: 'PLAYBACK',
+    subtitle: 'Review Your Shots',
+    description: 'Press to see your photos. Scroll through with the control wheel, pinch to zoom into details, and press the trash icon to delete duds. Press again or half-press the shutter to return to shooting.',
+    tips: [
+      'Double-tap to zoom to 100% and check focus',
+      'View histogram and EXIF data for each shot',
+      'Press the trash icon to delete unwanted photos',
+      'Half-press the shutter to instantly return to shooting mode',
+    ],
+    position: [2.6, -1.0, 1.85],
+    meshes: [playBtn, wheel],
+  },
+];
+
+const hotspotSprites = [];
+const allHotspots = [];
+hotspotData.forEach(hd => {
+  const spriteMat = new THREE.SpriteMaterial({
+    map: hotspotTex, transparent: true, opacity: 0.7, depthTest: true, depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(spriteMat);
+  sprite.position.set(...hd.position);
+  sprite.scale.set(0.55, 0.55, 0.55);
+  sprite.userData.hotspot = hd;
+  model.add(sprite);
+  hotspotSprites.push(sprite);
+  allHotspots.push({ sprite, data: hd, baseScale: 0.55 });
+  // Clone materials for the meshes so highlight is independent
+  hd.meshes.forEach(m => {
+    if (m.material) {
+      m.material = m.material.clone();
+      m.userData.hotspot = hd;
+    }
+  });
+});
+
+// ========================================================
+// CUSTOM ORBIT CONTROLS
+// ========================================================
+let azimuth = Math.PI * 0.72;
+let polar = Math.PI * 0.38;
+let currentDistance = 13;
+let targetDistance = 13;
+const orbitTarget = new THREE.Vector3(0, 0.2, -0.5);
+let isPointerDown = false;
+let isDragging = false;
+let lastX = 0, lastY = 0;
+let downX = 0, downY = 0;
+let idleRotation = true;
+let lastInteraction = performance.now();
+let isZoomed = false;
+
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2(-2, -2);
+let hoveredHotspot = null;
+
+const canvas = renderer.domElement;
+
+canvas.style.touchAction = 'none';
+
+canvas.addEventListener('pointerdown', (e) => {
+  isPointerDown = true; isDragging = false;
+  lastX = downX = e.clientX; lastY = downY = e.clientY;
+  idleRotation = false; lastInteraction = performance.now();
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  if (isPointerDown) {
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    if (Math.abs(e.clientX - downX) > 4 || Math.abs(e.clientY - downY) > 4) isDragging = true;
+    azimuth -= dx * 0.006;
+    polar -= dy * 0.006;
+    polar = Math.max(0.12, Math.min(Math.PI - 0.12, polar));
+    lastX = e.clientX; lastY = e.clientY;
+    lastInteraction = performance.now();
+  }
+});
+
+canvas.addEventListener('pointerup', (e) => {
+  isPointerDown = false;
+  if (!isDragging) {
+    const rect = canvas.getBoundingClientRect();
+    ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(hotspotSprites);
+    if (hits.length > 0) {
+      openInfoPanel(hits[0].object.userData.hotspot);
+    }
+  }
+  lastInteraction = performance.now();
+});
+
+canvas.addEventListener('pointerleave', () => { isPointerDown = false; });
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  targetDistance += e.deltaY * 0.008;
+  targetDistance = Math.max(4.5, Math.min(22, targetDistance));
+  idleRotation = false; lastInteraction = performance.now();
+}, { passive: false });
+
+// Touch pinch zoom
+let lastPinch = 0;
+canvas.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    lastPinch = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }
+}, { passive: true });
+canvas.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const d = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    targetDistance -= (d - lastPinch) * 0.03;
+    targetDistance = Math.max(4.5, Math.min(22, targetDistance));
+    lastPinch = d;
+    lastInteraction = performance.now();
+  }
+}, { passive: false });
+
+// ========================================================
+// TOOLTIP
+// ========================================================
+const tooltip = document.getElementById('tooltip');
+let tooltipX = 0, tooltipY = 0;
+
+function showTooltip(text, x, y) {
+  tooltip.textContent = text;
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+  tooltip.classList.add('show');
+}
+function hideTooltip() { tooltip.classList.remove('show'); }
+
+canvas.addEventListener('pointermove', (e) => {
+  tooltipX = e.clientX; tooltipY = e.clientY;
+});
+
+// ========================================================
+// INFO PANEL
+// ========================================================
+const panel = document.getElementById('info-panel');
+const infoTitle = document.getElementById('info-title');
+const infoSubtitle = document.getElementById('info-subtitle');
+const infoDesc = document.getElementById('info-description');
+const infoTips = document.getElementById('info-tips');
+const closeBtn = document.getElementById('close-info');
+
+function openInfoPanel(hd) {
+  infoTitle.textContent = hd.title;
+  infoSubtitle.textContent = hd.subtitle;
+  infoDesc.textContent = hd.description;
+  infoTips.innerHTML = '';
+  hd.tips.forEach(t => {
+    const li = document.createElement('li');
+    li.textContent = t;
+    infoTips.appendChild(li);
+  });
+  panel.classList.add('open');
+  closeBtn.focus();
+}
+function closeInfoPanel() { panel.classList.remove('open'); }
+closeBtn.addEventListener('click', closeInfoPanel);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInfoPanel(); });
+
+// ========================================================
+// ZOOM BUTTONS
+// ========================================================
+document.getElementById('zoom-in-btn').addEventListener('click', () => {
+  targetDistance = Math.max(4.5, targetDistance - 4);
+  lastInteraction = performance.now();
+});
+document.getElementById('zoom-out-btn').addEventListener('click', () => {
+  targetDistance = Math.min(22, targetDistance + 4);
+  lastInteraction = performance.now();
+});
+
+// ========================================================
+// INTRO
+// ========================================================
+const intro = document.getElementById('intro');
+document.getElementById('start-btn').addEventListener('click', () => {
+  intro.classList.add('hidden');
+  lastInteraction = performance.now();
+});
+
+// ========================================================
+// ANIMATION LOOP
+// ========================================================
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Idle rotation (slowly spin when idle)
+  if (!isPointerDown && performance.now() - lastInteraction > 4000) {
+    azimuth += 0.0015;
+  }
+
+  // Smooth zoom
+  currentDistance += (targetDistance - currentDistance) * 0.07;
+
+  // Camera position from spherical
+  const x = currentDistance * Math.sin(polar) * Math.sin(azimuth);
+  const y = currentDistance * Math.cos(polar);
+  const z = currentDistance * Math.sin(polar) * Math.cos(azimuth);
+  camera.position.set(x, y, z);
+  camera.lookAt(orbitTarget);
+
+  // Zoomed state → blur decorative layers
+  if (currentDistance < 7.5 && !isZoomed) {
+    isZoomed = true; document.body.classList.add('zoomed');
+  } else if (currentDistance >= 7.5 && isZoomed) {
+    isZoomed = false; document.body.classList.remove('zoomed');
+  }
+
+  // Pulse hotspots
+  allHotspots.forEach((hs, i) => {
+    const pulse = 1 + Math.sin(t * 2.5 + i * 0.6) * 0.18;
+    const s = hs.baseScale * pulse;
+    hs.sprite.scale.set(s, s, s);
+    hs.sprite.material.opacity = 0.55 + Math.sin(t * 2.5 + i * 0.6) * 0.2;
+  });
+
+  // Raycast for hover
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(hotspotSprites);
+
+  if (hits.length > 0) {
+    const hd = hits[0].object.userData.hotspot;
+    if (hoveredHotspot !== hd) {
+      if (hoveredHotspot) {
+        hoveredHotspot.meshes.forEach(m => {
+          if (m.material) m.material.emissive.setHex(0x000000);
+        });
+      }
+      hoveredHotspot = hd;
+      hd.meshes.forEach(m => {
+        if (m.material) m.material.emissive.setHex(0x2a5a9a);
+      });
+    }
+    showTooltip(hd.label, tooltipX, tooltipY);
+    canvas.style.cursor = 'pointer';
+  } else {
+    if (hoveredHotspot) {
+      hoveredHotspot.meshes.forEach(m => {
+        if (m.material) m.material.emissive.setHex(0x000000);
+      });
+      hoveredHotspot = null;
+    }
+    hideTooltip();
+    canvas.style.cursor = isPointerDown ? 'grabbing' : 'default';
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ========================================================
+// RESIZE
+// ========================================================
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Start
+animate();
+</script>
+</body>
+</html>
